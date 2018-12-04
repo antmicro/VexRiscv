@@ -149,7 +149,7 @@ class DBusCachedPlugin(config : DataCacheConfig,
         default -> input(RS2)(31 downto 0)
       )
       cache.io.cpu.execute.args.size := size
-      cache.io.cpu.execute.args.forceUncachedAccess := False 
+      cache.io.cpu.execute.args.forceUncachedAccess := False
       cache.io.cpu.execute.args.kind := input(MEMORY_MANAGMENT) ? DataCacheCpuCmdKind.MANAGMENT | DataCacheCpuCmdKind.MEMORY
       cache.io.cpu.execute.args.clean := input(INSTRUCTION)(28)
       cache.io.cpu.execute.args.invalidate := input(INSTRUCTION)(29)
@@ -194,7 +194,7 @@ class DBusCachedPlugin(config : DataCacheConfig,
           exceptionBus.code := (input(MEMORY_WR) ? U(6) | U(4)).resized
         }
         when(cache.io.cpu.writeBack.mmuMiss){
-          exceptionBus.code := 13
+          exceptionBus.code := (input(MEMORY_WR) ? U(15) | U(13)).resized
         }
       }
       arbitration.haltItself.setWhen(cache.io.cpu.writeBack.haltIt)

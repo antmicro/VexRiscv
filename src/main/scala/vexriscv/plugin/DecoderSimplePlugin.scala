@@ -138,12 +138,21 @@ class DecoderSimplePlugin(catchIllegalInstruction : Boolean = false, forceLegalI
       offset += e.dataType.getBitsWidth
     })
 
-
-    if(catchIllegalInstruction){
-      decodeExceptionPort.valid := arbitration.isValid && input(INSTRUCTION_READY) && !input(LEGAL_INSTRUCTION) // ?? HalitIt to alow decoder stage to wait valid data from 2 stages cache cache ??
-      decodeExceptionPort.code := 2
-      decodeExceptionPort.badAddr.assignDontCare()
+    when(input(INSTRUCTION) === B"00000000000000000000000001110011") {
+      decodeExceptionPort.valid := True
+      //We set the code to ecall from m mode here. It will be updated in CSR plugin during exception handling
+      decodeExceptionPort.code := 11
+      decodeExceptionPort.badAddr := input(PC)
+    }.otherwise {
+      if(catchIllegalInstruction){
+        decodeExceptionPort.valid := arbitration.isValid && input(INSTRUCTION_READY) && !input(LEGAL_INSTRUCTION) // ?? HalitIt to alow decoder stage to wait valid data from 2 stages cache cache ??
+        decodeExceptionPort.code := 2
+        decodeExceptionPort.badAddr.assignDontCare()
+      } else {
+        decodeExceptionPort.valid := False
+      }
     }
+
   }
 
   def bench(toplevel : VexRiscv): Unit ={

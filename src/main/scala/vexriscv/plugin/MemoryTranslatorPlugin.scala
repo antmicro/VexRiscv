@@ -15,6 +15,7 @@ case class MemoryTranslatorPort(bus : MemoryTranslatorBus, priority : Int, args 
 case class MemoryTranslatorPortConfig(portTlbSize : Int)
 
 class MemoryTranslatorPlugin(tlbSize : Int,
+                             kernelRange : UInt => Bool,
                              virtualRange : UInt => Bool,
                              ioRange : UInt => Bool) extends Plugin[VexRiscv] with MemoryTranslator {
   assert(isPow2(tlbSize))
@@ -34,10 +35,12 @@ class MemoryTranslatorPlugin(tlbSize : Int,
     import pipeline.config._
     def TLBW0  = M"0000000----------111-----0001111"
     def TLBW1  = M"0000001----------111-----0001111"
+    def MMUCTRL  = M"0000010----------111-----0001111"
     val decoderService = pipeline.service(classOf[DecoderService])
     decoderService.addDefault(IS_TLB, False)
     decoderService.add(TLBW0, List(IS_TLB -> True, RS1_USE -> True, SRC1_CTRL -> Src1CtrlEnum.RS))
     decoderService.add(TLBW1, List(IS_TLB -> True, RS1_USE -> True, RS2_USE -> True, SRC1_CTRL -> Src1CtrlEnum.RS))
+    decoderService.add(MMUCTRL, List(IS_TLB -> True, RS1_USE -> True, RS2_USE -> True, SRC1_CTRL -> Src1CtrlEnum.RS))
   }
 
   override def build(pipeline: VexRiscv): Unit = {
@@ -67,6 +70,7 @@ class MemoryTranslatorPlugin(tlbSize : Int,
         val readAddr = cache.addressType().assignDontCare()
         val readData = RegNext(cache.readSync(readAddr))
       }
+      val mmuEnabled = RegInit(False)
 
       val ports = for ((port, portId) <- sortedPortsInfo.zipWithIndex) yield new Area {
         val cache = Vec(Reg(CacheLine()) init, port.args.portTlbSize)
@@ -74,6 +78,7 @@ class MemoryTranslatorPlugin(tlbSize : Int,
         val cacheHit = cacheHits.asBits.orR
         val cacheLine = MuxOH(cacheHits, cache)
         val isInMmuRange = virtualRange(port.bus.cmd.virtualAddress) && !port.bus.cmd.bypassTranslation
+        val isInKernelRange = kernelRange(port.bus.cmd.virtualAddress) && !port.bus.cmd.bypassTranslation
 
         val sharedMiss = RegInit(False)
         val sharedIterator = Reg(UInt(log2Up(tlbSize + 1) bits))
@@ -107,14 +112,22 @@ class MemoryTranslatorPlugin(tlbSize : Int,
         }
 
 
-        when(isInMmuRange) {
+//          port.stage.arbitration.haltItself setWhen (port.bus.cmd.isValid && !cacheHit && !sharedMiss)
+        when(isInKernelRange) {
+          port.bus.rsp.physicalAddress(31 downto 28) := 4
+          port.bus.rsp.physicalAddress(27 downto 0) := port.bus.cmd.virtualAddress(27 downto 0)
+          port.bus.rsp.allowRead := True
+          port.bus.rsp.allowWrite := True
+          port.bus.rsp.allowExecute := True
+          port.bus.rsp.allowUser := False
+          port.bus.rsp.hit := True
+        }.elsewhen(isInMmuRange && mmuEnabled) {
           port.bus.rsp.physicalAddress := cacheLine.physicalAddress @@ port.bus.cmd.virtualAddress(11 downto 0)
           port.bus.rsp.allowRead := cacheLine.allowRead
           port.bus.rsp.allowWrite := cacheLine.allowWrite
           port.bus.rsp.allowExecute := cacheLine.allowExecute
           port.bus.rsp.allowUser := cacheLine.allowUser
           port.bus.rsp.hit := cacheHit
-//          port.stage.arbitration.haltItself setWhen (port.bus.cmd.isValid && !cacheHit && !sharedMiss)
         } otherwise {
           port.bus.rsp.physicalAddress := port.bus.cmd.virtualAddress
           port.bus.rsp.allowRead := True
@@ -123,7 +136,7 @@ class MemoryTranslatorPlugin(tlbSize : Int,
           port.bus.rsp.allowUser := True
           port.bus.rsp.hit := True
         }
-        port.bus.rsp.isIoAccess := ioRange(port.bus.rsp.physicalAddress)
+        port.bus.rsp.isIoAccess := True//ioRange(port.bus.rsp.physicalAddress)
         port.bus.rsp.miss := sharedMiss
       }
     }
@@ -134,7 +147,7 @@ class MemoryTranslatorPlugin(tlbSize : Int,
       import execute._
       val tlbWriteBuffer = Reg(UInt(20 bits))
       when(arbitration.isFiring && input(IS_TLB)){
-        switch(input(INSTRUCTION)(25 downto 25)){
+        switch(input(INSTRUCTION)(26 downto 25)){
           is(0){
             tlbWriteBuffer := input(SRC1).asUInt.resized
           }
@@ -150,6 +163,9 @@ class MemoryTranslatorPlugin(tlbSize : Int,
             core.shared.cache(input(SRC1)(log2Up(tlbSize)-1 downto 0).asUInt) := line
 
             core.ports.foreach(_.cache.foreach(_.valid := False)) //Invalidate all ports caches
+          is(2) {
+            core.mmuEnabled := input(RS2)(0)
+          }
           }
         }
       }

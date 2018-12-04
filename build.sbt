@@ -34,10 +34,9 @@ lazy val root = (project in file(".")).
     ),
     name := "VexRiscv"
   ).dependsOn(spinalHdlSim,spinalHdlCore,spinalHdlLib)
-lazy val spinalHdlSim = ProjectRef(file("../SpinalHDL"), "SpinalHDL-sim")
-lazy val spinalHdlCore = ProjectRef(file("../SpinalHDL"), "SpinalHDL-core")
-lazy val spinalHdlLib = ProjectRef(file("../SpinalHDL"), "SpinalHDL-lib")
-
+lazy val spinalHdlSim = ProjectRef(file("../spinal"), "SpinalHDL-sim")
+lazy val spinalHdlCore = ProjectRef(file("../spinal"), "SpinalHDL-core")
+lazy val spinalHdlLib = ProjectRef(file("../spinal"), "SpinalHDL-lib")
 
 addCompilerPlugin("org.scala-lang.plugins" % "scala-continuations-plugin_2.11.6" % "1.0.2")
 scalacOptions += "-P:continuations:enable"

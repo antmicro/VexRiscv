@@ -168,7 +168,7 @@ class IBusCachedPlugin(resetVector : BigInt = 0x80000000l,
         val illegalAccess = if (catchIllegalAccess) cacheRsp.illegalAccess else False
 
         decodeExceptionPort.valid := False
-        decodeExceptionPort.code  := mmuMiss ? U(14) | 1
+        decodeExceptionPort.code  := mmuMiss ? U(12) | 1
         decodeExceptionPort.badAddr := cacheRsp.pc
         when(cacheRsp.isValid && (accessFault || mmuMiss || illegalAccess) && !issueDetected){
           issueDetected \= True

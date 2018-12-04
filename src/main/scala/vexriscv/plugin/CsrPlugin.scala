@@ -74,6 +74,7 @@ case class CsrPluginConfig(
 
 object CsrPluginConfig{
   def all : CsrPluginConfig = all(0x00000020l)
+  def all2 : CsrPluginConfig = all2(0x00000020l)
   def small : CsrPluginConfig = small(0x00000020l)
   def smallest : CsrPluginConfig = smallest(0x00000020l)
 
@@ -100,23 +101,24 @@ object CsrPluginConfig{
 
   def all2(mtvecInit : BigInt) : CsrPluginConfig = CsrPluginConfig(
     catchIllegalAccess = true,
-    mvendorid      = 11,
-    marchid        = 22,
-    mimpid         = 33,
-    mhartid        = 0,
+    mvendorid      = null,
+    marchid        = null,
+    mimpid         = null,
+    mhartid        = null,
     misaExtensionsInit = 66,
-    misaAccess     = CsrAccess.READ_WRITE,
+    misaAccess     = CsrAccess.NONE,
     mtvecAccess    = CsrAccess.READ_WRITE,
     mtvecInit      = mtvecInit,
     mepcAccess     = CsrAccess.READ_WRITE,
     mscratchGen    = true,
     mcauseAccess   = CsrAccess.READ_WRITE,
     mbadaddrAccess = CsrAccess.READ_WRITE,
-    mcycleAccess   = CsrAccess.READ_WRITE,
-    minstretAccess = CsrAccess.READ_WRITE,
+    mcycleAccess   = CsrAccess.NONE,
+    minstretAccess = CsrAccess.NONE,
     ecallGen       = true,
-    wfiGenAsWait         = true,
-    ucycleAccess   = CsrAccess.READ_ONLY,
+    ebreakGen      = false,
+    wfiGenAsWait   = true,
+    ucycleAccess   = CsrAccess.NONE,
     supervisorGen  = true,
     sscratchGen    = true,
     stvecAccess    = CsrAccess.READ_WRITE,
@@ -329,8 +331,8 @@ class CsrPlugin(config : CsrPluginConfig) extends Plugin[VexRiscv] with Exceptio
 
     privilege = RegInit(U"11").setName("CsrPlugin_privilege")
 
-    if(catchIllegalAccess || ecallGen || ebreakGen)
-      selfException = newExceptionPort(pipeline.execute)
+    //if(catchIllegalAccess || ecallGen || ebreakGen)
+    //  selfException = newExceptionPort(pipeline.execute)
 
     allowInterrupts = True
     allowException = True
@@ -456,10 +458,10 @@ class CsrPlugin(config : CsrPluginConfig) extends Plugin[VexRiscv] with Exceptio
         }
 
         //Supervisor CSR
-        WRITE_ONLY(CSR.SSTATUS,8 -> sstatus.SPP, 5 -> sstatus.SPIE, 1 -> sstatus.SIE)
-        for(offset <- List(0, 0x200)) {
-          READ_ONLY(CSR.SSTATUS,8 -> sstatus.SPP, 5 -> sstatus.SPIE, 1 -> sstatus.SIE)
-        }
+        READ_WRITE(CSR.SSTATUS,8 -> sstatus.SPP, 5 -> sstatus.SPIE, 1 -> sstatus.SIE)
+        //for(offset <- List(0, 0x200)) {
+        //  READ_ONLY(CSR.SSTATUS,8 -> sstatus.SPP, 5 -> sstatus.SPIE, 1 -> sstatus.SIE)
+        //}
         READ_ONLY(CSR.SIP, 9 -> sip.SEIP, 5 -> sip.STIP)
         READ_WRITE(CSR.SIP, 1 -> sip.SSIP)
         READ_WRITE(CSR.SIE, 9 -> sie.SEIE, 5 -> sie.STIE, 1 -> sie.SSIE)
@@ -599,6 +601,14 @@ class CsrPlugin(config : CsrPluginConfig) extends Plugin[VexRiscv] with Exceptio
       val interruptCode = UInt(4 bits).assignDontCare().addTag(Verilator.public)
       val interruptTargetPrivilege = UInt(2 bits).assignDontCare()
 
+      //XXX: hack
+      when(privilege === 3) {
+        //interruptTargetPrivilege := 3
+        interruptCode := 11
+      }.otherwise {
+        //interruptTargetPrivilege := 1
+        interruptCode := 9
+      }
 
       for(model <- interruptModel){
         when(model.privilegeCond){
@@ -607,7 +617,7 @@ class CsrPlugin(config : CsrPluginConfig) extends Plugin[VexRiscv] with Exceptio
           }
           for(source <- model.sources){
             when(source.cond){
-              interruptCode := source.id
+          //    interruptCode := source.id
               interruptTargetPrivilege := solveDelegators(interruptDelegators, source.id, model.privilege)
             }
           }
@@ -639,16 +649,28 @@ class CsrPlugin(config : CsrPluginConfig) extends Plugin[VexRiscv] with Exceptio
 
       val targetPrivilege = CombInit(interruptTargetPrivilege)
       if(exceptionPortCtrl != null) when(hadException) {
-        targetPrivilege := exceptionPortCtrl.exceptionTargetPrivilege
+        when(exceptionPortCtrl.exceptionContext.code === 11) {
+          targetPrivilege := 1
+        }.otherwise { 
+          targetPrivilege := exceptionPortCtrl.exceptionTargetPrivilege
+        }
       }
-
       val trapCause = CombInit(interruptCode)
       if(exceptionPortCtrl != null) when( hadException){
-        trapCause := exceptionPortCtrl.exceptionContext.code
+        //update trap cause in ecall
+        when(exceptionPortCtrl.exceptionContext.code === 11) {
+          switch(privilege) {
+            is(0) {trapCause := 8}
+            is(1) {trapCause := 9}
+            default {trapCause := 11}
+          }
+        }.otherwise {
+          trapCause := exceptionPortCtrl.exceptionContext.code
+        }
       }
 
       when(exception || interruptJump){
-        switch(privilege){
+        switch(targetPrivilege){
           if(supervisorGen) is(1) {
             sepc := mepcCaptureStage.input(PC)
           }
@@ -660,11 +682,12 @@ class CsrPlugin(config : CsrPluginConfig) extends Plugin[VexRiscv] with Exceptio
 
       when(hadException || (interruptJump && !exception)){
         jumpInterface.valid := True
-        jumpInterface.payload := mtvec
         memory.arbitration.flushAll := True
+        privilege := targetPrivilege
 
         switch(targetPrivilege){
           if(supervisorGen) is(1) {
+            jumpInterface.payload := stvec
             sstatus.SIE := False
             sstatus.SPIE := sstatus.SIE
             sstatus.SPP := privilege(0 downto 0)
@@ -676,6 +699,7 @@ class CsrPlugin(config : CsrPluginConfig) extends Plugin[VexRiscv] with Exceptio
           }
 
           is(3){
+            jumpInterface.payload := mtvec
             mstatus.MIE  := False
             mstatus.MPIE := mstatus.MIE
             mstatus.MPP  := privilege
@@ -693,20 +717,21 @@ class CsrPlugin(config : CsrPluginConfig) extends Plugin[VexRiscv] with Exceptio
         def previousStage = memory
         //Manage MRET / SRET instructions
         when(arbitration.isValid && input(ENV_CTRL) === EnvCtrlEnum.XRET) {
-        jumpInterface.payload := mepc
           jumpInterface.valid := True
           previousStage.arbitration.flushAll := True
           switch(input(INSTRUCTION)(29 downto 28)){
             is(3){
+              jumpInterface.payload := mepc
               mstatus.MIE := mstatus.MPIE
               mstatus.MPP := U"00"
-              mstatus.MPIE := True
+              mstatus.MPIE := mstatus.MIE
               privilege := mstatus.MPP
             }
             if(supervisorGen) is(1){
+              jumpInterface.payload := sepc
               sstatus.SIE := sstatus.SPIE
               sstatus.SPP := U"0"
-              sstatus.SPIE := True
+              sstatus.SPIE := sstatus.SIE
               privilege := U"0" @@ sstatus.SPP
             }
           }
@@ -765,14 +790,22 @@ class CsrPlugin(config : CsrPluginConfig) extends Plugin[VexRiscv] with Exceptio
 
         //Manage ECALL instructions
         if(ecallGen) when(arbitration.isValid && input(ENV_CTRL) === EnvCtrlEnum.ECALL){
-          selfException.valid := True
-          selfException.code := 11
+          if(selfException != null) {
+            selfException.valid := True
+            switch(privilege) {
+              is(0) { selfException.code := 8 }
+              is(1) { selfException.code := 9 }
+              default { selfException.code := 11 }
+            }
+          }
         }
 
 
         if(ebreakGen) when(arbitration.isValid && input(ENV_CTRL) === EnvCtrlEnum.EBREAK){
-          selfException.valid := True
-          selfException.code := 3
+          if(selfException != null) {
+            selfException.valid := True
+            selfException.code := 3
+          }
         }
 
 
