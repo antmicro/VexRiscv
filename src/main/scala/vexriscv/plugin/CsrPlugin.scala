@@ -113,12 +113,12 @@ object CsrPluginConfig{
     mscratchGen    = true,
     mcauseAccess   = CsrAccess.READ_WRITE,
     mbadaddrAccess = CsrAccess.READ_WRITE,
-    mcycleAccess   = CsrAccess.NONE,
+    mcycleAccess   = CsrAccess.READ_ONLY,
     minstretAccess = CsrAccess.NONE,
     ecallGen       = true,
     ebreakGen      = false,
     wfiGenAsWait   = true,
-    ucycleAccess   = CsrAccess.NONE,
+    ucycleAccess   = CsrAccess.READ_ONLY,
     supervisorGen  = true,
     sscratchGen    = true,
     stvecAccess    = CsrAccess.READ_WRITE,
@@ -602,6 +602,7 @@ class CsrPlugin(config : CsrPluginConfig) extends Plugin[VexRiscv] with Exceptio
       val interruptTargetPrivilege = UInt(2 bits).assignDontCare()
 
       //XXX: hack
+      /*
       when(privilege === 3) {
         //interruptTargetPrivilege := 3
         interruptCode := 11
@@ -609,7 +610,7 @@ class CsrPlugin(config : CsrPluginConfig) extends Plugin[VexRiscv] with Exceptio
         //interruptTargetPrivilege := 1
         interruptCode := 9
       }
-
+      */
       for(model <- interruptModel){
         when(model.privilegeCond){
           when(model.sources.map(_.cond).orR){
@@ -617,7 +618,7 @@ class CsrPlugin(config : CsrPluginConfig) extends Plugin[VexRiscv] with Exceptio
           }
           for(source <- model.sources){
             when(source.cond){
-          //    interruptCode := source.id
+              interruptCode := source.id
               interruptTargetPrivilege := solveDelegators(interruptDelegators, source.id, model.privilege)
             }
           }
