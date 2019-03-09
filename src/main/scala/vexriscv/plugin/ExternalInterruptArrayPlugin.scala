@@ -14,7 +14,7 @@ class ExternalInterruptArrayPlugin(arrayWidth : Int = 32, maskCsrId : Int = 0xBC
     val csr = pipeline.service(classOf[CsrPlugin])
     val mask = Reg(Bits(arrayWidth bits)) init(0)
     val pendings = mask & RegNext(externalInterruptArray)
-    csr.externalInterrupt.setAsDirectionLess() := pendings.orR
+    csr.externalInterruptS.setAsDirectionLess() := pendings.orR
     csr.rw(maskCsrId, mask)
     csr.r(pendingsCsrId, pendings)
   }
