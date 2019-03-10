@@ -424,7 +424,7 @@ class CsrPlugin(config : CsrPluginConfig) extends Plugin[VexRiscv] with Exceptio
 
       //User CSR
       ucycleAccess(CSR.UCYCLE, mcycle(31 downto 0))
-      ucycleAccess(CSR.UCYCLEH, mcycle(31 downto 0))
+      ucycleAccess(CSR.UCYCLEH, mcycle(63 downto 32))
     }
 
     val supervisorCsr = ifGen(supervisorGen) {
