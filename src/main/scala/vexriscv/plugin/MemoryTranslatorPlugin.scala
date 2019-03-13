@@ -112,7 +112,7 @@ class MemoryTranslatorPlugin(tlbSize : Int,
         }
 
 
-//          port.stage.arbitration.haltItself setWhen (port.bus.cmd.isValid && !cacheHit && !sharedMiss)
+        // port.stage.arbitration.haltItself setWhen (port.bus.cmd.isValid && !cacheHit && !sharedMiss)
         when(isInKernelRange) {
           port.bus.rsp.physicalAddress(31 downto 28) := 4
           port.bus.rsp.physicalAddress(27 downto 0) := port.bus.cmd.virtualAddress(27 downto 0)

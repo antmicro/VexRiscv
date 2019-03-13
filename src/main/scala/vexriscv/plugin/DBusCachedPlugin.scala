@@ -153,7 +153,7 @@ class DBusCachedPlugin(config : DataCacheConfig,
       cache.io.cpu.execute.args.kind := input(MEMORY_MANAGMENT) ? DataCacheCpuCmdKind.MANAGMENT | DataCacheCpuCmdKind.MEMORY
       cache.io.cpu.execute.args.clean := input(INSTRUCTION)(28)
       cache.io.cpu.execute.args.invalidate := input(INSTRUCTION)(29)
-      cache.io.cpu.execute.args.way := input(INSTRUCTION)(30)
+      cache.io.cpu.execute.args.way := input(MEMORY_MANAGMENT) ? input(INSTRUCTION)(30) | False
       if(genAtomic) {
         cache.io.cpu.execute.args.isAtomic := False
         when(input(MEMORY_ATOMIC)){
