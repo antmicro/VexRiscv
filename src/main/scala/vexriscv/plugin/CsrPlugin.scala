@@ -491,7 +491,7 @@ class CsrPlugin(config : CsrPluginConfig) extends Plugin[VexRiscv] with Exceptio
       case class InterruptSource(cond : Bool, id : Int)
       case class InterruptModel(privilege : Int, privilegeCond : Bool, sources : ArrayBuffer[InterruptSource])
       val interruptModel = ArrayBuffer[InterruptModel]()
-      if(supervisorGen) interruptModel += InterruptModel(1, sstatus.SIE && privilege <= "01", ArrayBuffer(
+      if(supervisorGen) interruptModel += InterruptModel(1, (sstatus.SIE && privilege <= "01") || privilege === "00", ArrayBuffer(
         InterruptSource(sip.STIP && sie.STIE,  5),
         InterruptSource(sip.SSIP && sie.SSIE,  1),
         InterruptSource(sip.SEIP && sie.SEIE,  9)
@@ -657,7 +657,7 @@ class CsrPlugin(config : CsrPluginConfig) extends Plugin[VexRiscv] with Exceptio
         }
       }
       val trapCause = CombInit(interruptCode)
-      if(exceptionPortCtrl != null) when( hadException){
+      if(exceptionPortCtrl != null) when( hadException && !interrupt){
         //update trap cause in ecall
         when(exceptionPortCtrl.exceptionContext.code === 11) {
           switch(privilege) {
@@ -692,7 +692,7 @@ class CsrPlugin(config : CsrPluginConfig) extends Plugin[VexRiscv] with Exceptio
             sstatus.SIE := False
             sstatus.SPIE := sstatus.SIE
             sstatus.SPP := privilege(0 downto 0)
-            scause.interrupt := !hadException
+            scause.interrupt := interrupt
             scause.exceptionCode := trapCause
             if (exceptionPortCtrl != null) {
               stval := exceptionPortCtrl.exceptionContext.badAddr
@@ -704,7 +704,7 @@ class CsrPlugin(config : CsrPluginConfig) extends Plugin[VexRiscv] with Exceptio
             mstatus.MIE  := False
             mstatus.MPIE := mstatus.MIE
             mstatus.MPP  := privilege
-            mcause.interrupt := !hadException
+            mcause.interrupt := interrupt
             mcause.exceptionCode := trapCause
             if(exceptionPortCtrl != null) {
               mtval := exceptionPortCtrl.exceptionContext.badAddr
@@ -732,7 +732,7 @@ class CsrPlugin(config : CsrPluginConfig) extends Plugin[VexRiscv] with Exceptio
               jumpInterface.payload := sepc
               sstatus.SIE := sstatus.SPIE
               sstatus.SPP := U"0"
-              sstatus.SPIE := sstatus.SIE
+              sstatus.SPIE := True
               privilege := U"0" @@ sstatus.SPP
             }
           }

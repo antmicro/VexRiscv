@@ -139,7 +139,7 @@ class DecoderSimplePlugin(catchIllegalInstruction : Boolean = false, forceLegalI
     })
 
     when(input(INSTRUCTION) === B"00000000000000000000000001110011") {
-      decodeExceptionPort.valid := True
+      decodeExceptionPort.valid := arbitration.isValid && input(INSTRUCTION_READY)
       //We set the code to ecall from m mode here. It will be updated in CSR plugin during exception handling
       decodeExceptionPort.code := 11
       decodeExceptionPort.badAddr := input(PC)
