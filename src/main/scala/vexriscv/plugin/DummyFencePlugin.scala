@@ -10,7 +10,7 @@ class DummyFencePlugin extends Plugin[VexRiscv]{
     import pipeline.config._
 
     val decoderService = pipeline.service(classOf[DecoderService])
-    decoderService.add(FENCE_I, Nil)
+    // decoderService.add(FENCE_I, Nil)
     decoderService.add(FENCE, Nil)
   }
 
