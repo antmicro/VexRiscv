@@ -151,8 +151,8 @@ class DBusCachedPlugin(config : DataCacheConfig,
       cache.io.cpu.execute.args.size := size
       cache.io.cpu.execute.args.forceUncachedAccess := False
       cache.io.cpu.execute.args.kind := input(MEMORY_MANAGMENT) ? DataCacheCpuCmdKind.MANAGMENT | DataCacheCpuCmdKind.MEMORY
-      cache.io.cpu.execute.args.clean := input(INSTRUCTION)(28)
-      cache.io.cpu.execute.args.invalidate := input(INSTRUCTION)(29)
+      cache.io.cpu.execute.args.clean := input(MEMORY_MANAGMENT) ? input(INSTRUCTION)(28) | False
+      cache.io.cpu.execute.args.invalidate := input(MEMORY_MANAGMENT) ? input(INSTRUCTION)(29) | False
       cache.io.cpu.execute.args.way := input(MEMORY_MANAGMENT) ? input(INSTRUCTION)(30) | False
       if(genAtomic) {
         cache.io.cpu.execute.args.isAtomic := False
@@ -188,7 +188,7 @@ class DBusCachedPlugin(config : DataCacheConfig,
         exceptionBus.badAddr := cache.io.cpu.writeBack.badAddr
         exceptionBus.code.assignDontCare()
         when(cache.io.cpu.writeBack.illegalAccess || cache.io.cpu.writeBack.accessError){
-          exceptionBus.code := (input(MEMORY_WR) ? U(7) | U(5)).resized
+          exceptionBus.code := (input(MEMORY_WR) ? U(15) | U(13)).resized
         }
         when(cache.io.cpu.writeBack.unalignedAccess){
           exceptionBus.code := (input(MEMORY_WR) ? U(6) | U(4)).resized
