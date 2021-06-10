@@ -540,6 +540,9 @@ class DataCache(val p : DataCacheConfig, mmuParameter : MemoryTranslatorBusParam
   val io = new Bundle{
     val cpu = slave(DataCacheCpuBus(p, mmuParameter))
     val mem = master(DataCacheMemBus(p))
+    val isAcc = out Bool()
+    val isRefill = out Bool()
+    val isStalled = out Bool()
   }
 
   val haltCpu = False
@@ -914,6 +917,11 @@ class DataCache(val p : DataCacheConfig, mmuParameter : MemoryTranslatorBusParam
     val bypassCache = mmuRsp.isIoAccess || isExternalLsrc || isExternalAmo
 
     io.cpu.writeBack.keepMemRspData := False
+
+    io.isAcc := False
+    io.isRefill := False
+    io.isStalled := io.mem.cmd.valid & !io.mem.cmd.ready;
+
     when(io.cpu.writeBack.isValid) {
       when(isExternalAmo){
         if(withExternalAmo) switch(amo.external.state){
@@ -960,6 +968,7 @@ class DataCache(val p : DataCacheConfig, mmuParameter : MemoryTranslatorBusParam
           io.cpu.writeBack.haltIt := False
         }
       } otherwise {
+        io.isAcc := !io.cpu.writeBack.isStuck
         when(waysHit || request.wr && !isAmoCached) {   //Do not require a cache refill ?
           cpuWriteToCache := True
 
@@ -989,6 +998,8 @@ class DataCache(val p : DataCacheConfig, mmuParameter : MemoryTranslatorBusParam
             io.cpu.writeBack.haltIt := False
           }
         } otherwise { //Do refill
+          //io.isRefill := True
+          io.isRefill := io.mem.cmd.valid & io.mem.cmd.ready;
           //Emit cmd
           io.mem.cmd.valid setWhen(!memCmdSent)
           io.mem.cmd.wr := False

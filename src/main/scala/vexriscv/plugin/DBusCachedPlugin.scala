@@ -437,6 +437,24 @@ class DBusCachedPlugin(val config : DataCacheConfig,
     if(csrInfo){
       val csr = service(classOf[CsrPlugin])
       csr.r(0xCC0, 0 ->  U(cacheSize/wayCount),  20 ->  U(bytePerLine))
+
+      val accCounter = Reg(UInt(32 bits))
+      when(cache.io.isAcc) {
+        accCounter := accCounter + 1
+      }
+      csr.rw(0xCC4, accCounter)
+
+      val refillCounter = Reg(UInt(32 bits))
+      when(cache.io.isRefill) {
+        refillCounter := refillCounter + 1
+      }
+      csr.rw(0xCC8, refillCounter)
+
+      val stallCounter = Reg(UInt(32 bits))
+      when(cache.io.isStalled) {
+        stallCounter := stallCounter + 1
+      }
+      csr.rw(0xCCC, stallCounter)
     }
   }
 }
